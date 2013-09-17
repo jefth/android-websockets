@@ -1,4 +1,4 @@
-package com.codebutler.android_websockets;
+package com.codebutler.aws;
 
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -26,12 +26,12 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
 
-public class WebSocketClient {
-    private static final String TAG = "WebSocketClient";
+public class WebSocket {
+    private static final String TAG = "WebSocket";
 
     private URI                      mURI;
     private Listener                 mListener;
-    private Socket                   mSocket;
+    private Socket                  mSocket;
     private Thread                   mThread;
     private HandlerThread            mHandlerThread;
     private Handler                  mHandler;
@@ -46,7 +46,7 @@ public class WebSocketClient {
         sTrustManagers = tm;
     }
 
-    public WebSocketClient(URI uri, Listener listener, List<BasicNameValuePair> extraHeaders) {
+    public WebSocket(URI uri, Listener listener, List<BasicNameValuePair> extraHeaders) {
         mURI          = uri;
         mListener = listener;
         mExtraHeaders = extraHeaders;
@@ -71,18 +71,21 @@ public class WebSocketClient {
             public void run() {
                 try {
                     String secret = createSecret();
+                    String scheme = mURI.getScheme();
+                    String path = mURI.getPath();
+                    int port = (mURI.getPort() != -1) ? mURI.getPort() : (scheme.equals("wss") ? 443 : 80);
 
-                    int port = (mURI.getPort() != -1) ? mURI.getPort() : (mURI.getScheme().equals("wss") ? 443 : 80);
-
-                    String path = TextUtils.isEmpty(mURI.getPath()) ? "/" : mURI.getPath();
+                    path = TextUtils.isEmpty(path) ? "/" : path;
                     if (!TextUtils.isEmpty(mURI.getQuery())) {
                         path += "?" + mURI.getQuery();
                     }
 
-                    String originScheme = mURI.getScheme().equals("wss") ? "https" : "http";
+                    String originScheme = scheme.equals("wss") ? "https" : "http";
                     URI origin = new URI(originScheme, "//" + mURI.getHost(), null);
 
-                    SocketFactory factory = mURI.getScheme().equals("wss") ? getSSLSocketFactory() : SocketFactory.getDefault();
+                    SocketFactory factory = scheme.equals("wss") ?
+                            getSSLSocketFactory() :
+                            SocketFactory.getDefault();
                     mSocket = factory.createSocket(mURI.getHost(), port);
 
                     PrintWriter out = new PrintWriter(mSocket.getOutputStream());
@@ -101,7 +104,8 @@ public class WebSocketClient {
                     out.print("\r\n");
                     out.flush();
 
-                    HybiParser.HappyDataInputStream stream = new HybiParser.HappyDataInputStream(mSocket.getInputStream());
+                    HybiParser.HappyDataInputStream stream =
+                            new HybiParser.HappyDataInputStream(mSocket.getInputStream());
 
                     // Read HTTP response status line.
                     StatusLine statusLine = parseStatusLine(readLine(stream));
@@ -242,7 +246,7 @@ public class WebSocketClient {
                         outputStream.write(frame);
                         outputStream.flush();
                     }
-                } catch (IOException e) {
+                } catch (Exception e) {
                     mListener.onError(e);
                 }
             }
@@ -251,8 +255,8 @@ public class WebSocketClient {
 
     public interface Listener {
         public void onConnect();
-        public void onMessage(String message);
-        public void onMessage(byte[] data);
+        public void onReceived(String message);
+        public void onReceived(byte[] data);
         public void onDisconnect(int code, String reason);
         public void onError(Exception error);
     }

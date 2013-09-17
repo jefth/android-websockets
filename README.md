@@ -24,12 +24,12 @@ WebSocketClient client = new WebSocketClient(URI.create("wss://irccloud.com"), n
     }
 
     @Override
-    public void onMessage(String message) {
+    public void onReceived(String message) {
         Log.d(TAG, String.format("Got string message! %s", message));
     }
 
     @Override
-    public void onMessage(byte[] data) {
+    public void onReceived(byte[] data) {
         Log.d(TAG, String.format("Got binary message! %s", toHexString(data));
     }
 

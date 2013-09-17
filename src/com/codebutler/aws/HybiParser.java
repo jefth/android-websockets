@@ -28,7 +28,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-package com.codebutler.android_websockets;
+package com.codebutler.aws;
 
 import android.util.Log;
 
@@ -39,7 +39,7 @@ import java.util.List;
 public class HybiParser {
     private static final String TAG = "HybiParser";
 
-    private WebSocketClient mClient;
+    private WebSocket mClient;
 
     private boolean mMasking = true;
 
@@ -91,7 +91,7 @@ public class HybiParser {
         OP_CONTINUATION, OP_TEXT, OP_BINARY
     );
 
-    public HybiParser(WebSocketClient client) {
+    public HybiParser(WebSocket client) {
         mClient = client;
     }
 
@@ -262,9 +262,9 @@ public class HybiParser {
             if (mFinal) {
                 byte[] message = mBuffer.toByteArray();
                 if (mMode == MODE_TEXT) {
-                    mClient.getListener().onMessage(encode(message));
+                    mClient.getListener().onReceived(encode(message));
                 } else {
-                    mClient.getListener().onMessage(message);
+                    mClient.getListener().onReceived(message);
                 }
                 reset();
             }
@@ -272,7 +272,7 @@ public class HybiParser {
         } else if (opcode == OP_TEXT) {
             if (mFinal) {
                 String messageText = encode(payload);
-                mClient.getListener().onMessage(messageText);
+                mClient.getListener().onReceived(messageText);
             } else {
                 mMode = MODE_TEXT;
                 mBuffer.write(payload);
@@ -280,7 +280,7 @@ public class HybiParser {
 
         } else if (opcode == OP_BINARY) {
             if (mFinal) {
-                mClient.getListener().onMessage(payload);
+                mClient.getListener().onReceived(payload);
             } else {
                 mMode = MODE_BINARY;
                 mBuffer.write(payload);

@@ -1,4 +1,5 @@
 gen/
+out/
 build/
 local.properties
 .gradle
