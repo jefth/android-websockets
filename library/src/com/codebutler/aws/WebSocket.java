@@ -65,8 +65,12 @@ public class WebSocket {
         return mListener;
     }
 
+    public boolean isConnected(){
+        return mThread != null && mThread.isAlive();
+    }
+
     public void connect() {
-        if (mThread != null && mThread.isAlive()) {
+        if (isConnected()) {
             return;
         }
 
@@ -74,23 +78,24 @@ public class WebSocket {
             @Override
             public void run() {
                 try {
-                    String secret = createSecret();
+
                     String scheme = mURI.getScheme();
                     String path = mURI.getPath();
-                    int port = (mURI.getPort() != -1) ? mURI.getPort() : (scheme.equals("wss") ? 443 : 80);
+                    final boolean isSSL = scheme.equalsIgnoreCase("wss");
+                    int port = (mURI.getPort() != -1) ? mURI.getPort() : (isSSL ? 443 : 80);
 
                     path = TextUtils.isEmpty(path) ? "/" : path;
                     if (!TextUtils.isEmpty(mURI.getQuery())) {
                         path += "?" + mURI.getQuery();
                     }
 
-                    String originScheme = scheme.equals("wss") ? "https" : "http";
+                    String originScheme = isSSL ? "https" : "http";
                     URI origin = new URI(originScheme, "//" + mURI.getHost(), null);
 
-                    SocketFactory factory = scheme.equals("wss") ?
-                            getSSLSocketFactory() :
-                            SocketFactory.getDefault();
+                    SocketFactory factory = isSSL ?
+                            getSSLSocketFactory() :  SocketFactory.getDefault();
                     mSocket = factory.createSocket(mURI.getHost(), port);
+                    String secret = createSecret();
 
                     PrintWriter out = new PrintWriter(mSocket.getOutputStream());
                     out.print("GET " + path + " HTTP/1.1\r\n");
