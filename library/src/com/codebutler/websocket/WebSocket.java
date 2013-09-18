@@ -85,11 +85,15 @@ public class WebSocket {
         return mSocketCallback;
     }
 
+    public boolean isConnected(){
+        return mThread != null && mThread.isAlive();
+    }
+
     /**
      * 建立连接。如果此前已经创建连接并且该连接仍然有效，则不会执行连接操作。
      */
     public void connect() {
-        if (mThread != null && mThread.isAlive()) {
+        if (isConnected()) {
             return;
         }
         mThread = new Thread(new Runnable() {
