@@ -46,6 +46,10 @@ public class WebSocket {
         sTrustManagers = tm;
     }
 
+    public WebSocket(String wsUrl,Listener l,List<BasicNameValuePair> extraHeaders){
+        this(URI.create(wsUrl),l,extraHeaders);
+    }
+
     public WebSocket(URI uri, Listener listener, List<BasicNameValuePair> extraHeaders) {
         mURI          = uri;
         mListener = listener;
