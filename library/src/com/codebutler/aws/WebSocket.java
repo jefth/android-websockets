@@ -30,7 +30,7 @@ public class WebSocket {
     private static final String TAG = "WebSocket";
 
     private URI                      mURI;
-    private Listener                 mListener;
+    private WSCallback mWSCallback;
     private Socket                  mSocket;
     private Thread                   mThread;
     private HandlerThread            mHandlerThread;
@@ -46,13 +46,13 @@ public class WebSocket {
         sTrustManagers = tm;
     }
 
-    public WebSocket(String wsUrl,Listener l,List<BasicNameValuePair> extraHeaders){
+    public WebSocket(String wsUrl,WSCallback l,List<BasicNameValuePair> extraHeaders){
         this(URI.create(wsUrl),l,extraHeaders);
     }
 
-    public WebSocket(URI uri, Listener listener, List<BasicNameValuePair> extraHeaders) {
+    public WebSocket(URI uri, WSCallback WSCallback, List<BasicNameValuePair> extraHeaders) {
         mURI          = uri;
-        mListener = listener;
+        mWSCallback = WSCallback;
         mExtraHeaders = extraHeaders;
         mParser       = new HybiParser(this);
 
@@ -61,8 +61,8 @@ public class WebSocket {
         mHandler = new Handler(mHandlerThread.getLooper());
     }
 
-    public Listener getListener() {
-        return mListener;
+    public WSCallback getListener() {
+        return mWSCallback;
     }
 
     public boolean isConnected(){
@@ -146,22 +146,22 @@ public class WebSocket {
                         throw new HttpException("No Sec-WebSocket-Accept header.");
                     }
 
-                    mListener.onConnect();
+                    mWSCallback.onConnect();
 
                     // Now decode websocket frames.
                     mParser.start(stream);
 
                 } catch (EOFException ex) {
                     Log.d(TAG, "WebSocket EOF!", ex);
-                    mListener.onDisconnect(0, "EOF");
+                    mWSCallback.onDisconnect(0, "EOF");
 
                 } catch (SSLException ex) {
                     // Connection reset by peer
                     Log.d(TAG, "Websocket SSL error!", ex);
-                    mListener.onDisconnect(0, "SSL");
+                    mWSCallback.onDisconnect(0, "SSL");
 
                 } catch (Exception ex) {
-                    mListener.onError(ex);
+                    mWSCallback.onError(ex);
                 }
             }
         });
@@ -178,7 +178,7 @@ public class WebSocket {
                         mSocket = null;
                     } catch (IOException ex) {
                         Log.d(TAG, "Error while disconnecting", ex);
-                        mListener.onError(ex);
+                        mWSCallback.onError(ex);
                     }
                 }
             });
@@ -256,19 +256,13 @@ public class WebSocket {
                         outputStream.flush();
                     }
                 } catch (Exception e) {
-                    mListener.onError(e);
+                    mWSCallback.onError(e);
                 }
             }
         });
     }
 
-    public interface Listener {
-        public void onConnect();
-        public void onReceived(String message);
-        public void onReceived(byte[] data);
-        public void onDisconnect(int code, String reason);
-        public void onError(Exception error);
-    }
+
 
     private SSLSocketFactory getSSLSocketFactory() throws NoSuchAlgorithmException, KeyManagementException {
         SSLContext context = SSLContext.getInstance("TLS");

@@ -262,9 +262,9 @@ public class HybiParser {
             if (mFinal) {
                 byte[] message = mBuffer.toByteArray();
                 if (mMode == MODE_TEXT) {
-                    mClient.getListener().onReceived(encode(message));
+                    mClient.getListener().onMessage(encode(message));
                 } else {
-                    mClient.getListener().onReceived(message);
+                    mClient.getListener().onMessage(message);
                 }
                 reset();
             }
@@ -272,7 +272,7 @@ public class HybiParser {
         } else if (opcode == OP_TEXT) {
             if (mFinal) {
                 String messageText = encode(payload);
-                mClient.getListener().onReceived(messageText);
+                mClient.getListener().onMessage(messageText);
             } else {
                 mMode = MODE_TEXT;
                 mBuffer.write(payload);
@@ -280,7 +280,7 @@ public class HybiParser {
 
         } else if (opcode == OP_BINARY) {
             if (mFinal) {
-                mClient.getListener().onReceived(payload);
+                mClient.getListener().onMessage(payload);
             } else {
                 mMode = MODE_BINARY;
                 mBuffer.write(payload);
