@@ -105,9 +105,6 @@ public class WebSocket {
             public void run() {
                 try {
                     String scheme = uri.getScheme();
-                    if(!verifyScheme(scheme)){
-                        throw new IllegalArgumentException("Unknown Web Socket scheme: "+scheme);
-                    }
                     String path = uri.getPath();
                     final boolean isSSL = scheme.equalsIgnoreCase("wss");
                     int port = (uri.getPort() != -1) ? uri.getPort() : (isSSL ? 443 : 80);
@@ -155,34 +152,39 @@ public class WebSocket {
                     // Read HTTP response headers.
                     String line;
                     boolean validated = false;
+
                     while (!TextUtils.isEmpty(line = readLine(stream))) {
                         Header header = parseHeader(line);
                         if (header.getName().equals("Sec-WebSocket-Accept")) {
                             String expected = createSecretValidation(secret);
                             String actual = header.getValue().trim();
+
                             if (!expected.equals(actual)) {
                                 throw new HttpException("Bad Sec-WebSocket-Accept header value.");
                             }
+
                             validated = true;
-                            break;
                         }
                     }
+
                     if (!validated) {
                         throw new HttpException("No Sec-WebSocket-Accept header.");
                     }
 
                     wsCallback.onConnect();
 
-                    // 若读取失败，此方法将被返回，Thread被结束。
+                    // Now decode websocket frames.
                     parser.start(stream);
 
                 } catch (EOFException ex) {
                     Log.d(TAG, "WebSocket EOF!", ex);
                     wsCallback.onDisconnect(0, "EOF");
+
                 } catch (SSLException ex) {
                     // Connection reset by peer
                     Log.d(TAG, "Websocket SSL error!", ex);
                     wsCallback.onDisconnect(0, "SSL");
+
                 } catch (Exception ex) {
                     wsCallback.onError(ex);
                 }

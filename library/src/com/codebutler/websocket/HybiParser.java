@@ -79,16 +79,16 @@ public class HybiParser {
     private static final int OP_PONG         = 10;
 
     private static final List<Integer> OPCODES = Arrays.asList(
-        OP_CONTINUATION,
-        OP_TEXT,
-        OP_BINARY,
-        OP_CLOSE,
-        OP_PING,
-        OP_PONG
+                                                                      OP_CONTINUATION,
+                                                                      OP_TEXT,
+                                                                      OP_BINARY,
+                                                                      OP_CLOSE,
+                                                                      OP_PING,
+                                                                      OP_PONG
     );
 
     private static final List<Integer> FRAGMENTED_OPCODES = Arrays.asList(
-        OP_CONTINUATION, OP_TEXT, OP_BINARY
+                                                                                 OP_CONTINUATION, OP_TEXT, OP_BINARY
     );
 
     public HybiParser(WebSocket client) {
@@ -230,8 +230,8 @@ public class HybiParser {
 
         if (mMasking) {
             byte[] mask = {
-                (byte) Math.floor(Math.random() * 256), (byte) Math.floor(Math.random() * 256),
-                (byte) Math.floor(Math.random() * 256), (byte) Math.floor(Math.random() * 256)
+                                  (byte) Math.floor(Math.random() * 256), (byte) Math.floor(Math.random() * 256),
+                                  (byte) Math.floor(Math.random() * 256), (byte) Math.floor(Math.random() * 256)
             };
             System.arraycopy(mask, 0, frame, header, mask.length);
             mask(frame, mask, offset);
@@ -265,7 +265,6 @@ public class HybiParser {
                     mClient.getCallback().onMessage(encode(message));
                 } else {
                     mClient.getCallback().onMessage(message);
-
                 }
                 reset();
             }
@@ -292,6 +291,7 @@ public class HybiParser {
             String reason = (payload.length >  2) ? encode(slice(payload, 2))     : null;
             Log.d(TAG, "Got close op! " + code + " " + reason);
             mClient.getCallback().onDisconnect(code, reason);
+
         } else if (opcode == OP_PING) {
             if (payload.length > 125) { throw new ProtocolError("Ping payload too large"); }
             Log.d(TAG, "Sending pong!!");
