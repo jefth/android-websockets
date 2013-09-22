@@ -1,7 +1,8 @@
 package net.yoojia.aws;
 
 import android.util.Log;
-import com.codebutler.aws.WebSocket;
+import com.codebutler.websocket.WSCallback;
+import com.codebutler.websocket.WebSocket;
 import junit.framework.TestCase;
 import org.apache.http.message.BasicNameValuePair;
 
@@ -18,19 +19,19 @@ public class Test extends TestCase{
                 new BasicNameValuePair("Cookie", "session=abcd")
         );
         WebSocket client = new WebSocket(
-                URI.create("ws://192.168.1.248:8889/websocket"), new WebSocket.Listener() {
+                URI.create("ws://192.168.1.248:8889/websocket"), new WSCallback() {
             @Override
             public void onConnect() {
                 Log.d(TAG, "连接成功!");
             }
 
             @Override
-            public void onReceived(String message) {
+            public void onMessage(String message) {
                 Log.d(TAG, String.format("返回数据（字符）:\n %s", message));
             }
 
             @Override
-            public void onReceived(byte[] data) {
+            public void onMessage(byte[] data) {
                 Log.d(TAG, String.format("返回数据（字节）:\n %s", String.valueOf(data)));
             }
 

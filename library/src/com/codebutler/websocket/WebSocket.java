@@ -31,116 +31,118 @@ import java.util.List;
  */
 public class WebSocket {
     private static final String TAG = "WebSocket";
+    private URI uri;
+    private WSCallback wsCallback;
+    private Socket socket;
+    private Thread workThread;
+    private HandlerThread handlerThread;
+    private Handler handler;
+    private List<BasicNameValuePair> extraHeaders;
+    private HybiParser parser;
+    private final Object sendLock = new Object();
 
-    private URI                      mURI;
-    private SocketCallback mSocketCallback;
-    private Socket                  mSocket;
-    private Thread                   mThread;
-    private HandlerThread            mHandlerThread;
-    private Handler                  mHandler;
-    private List<BasicNameValuePair> mExtraHeaders;
-    private HybiParser               mParser;
-
-    private final Object mSendLock = new Object();
-
-    private static TrustManager[] sTrustManagers;
+    private static TrustManager[] trustManagers;
 
     /**
-     * 创建WebSocket对象
-     * @param wsUrl 连接路径
-     * @param socketCallback 响应回调接口
+     * 这是用于 JSSE 信任管理器的基接口。
+     * TrustManager 负责管理做出信任决定时使用的的信任材料，也负责决定是否接受同位体提供的证书。
+     * 通过使用 TrustManagerFactory，或实现 TrustManager 子类之一创建 TrustManager。
+     * @param tm 信任管理器的接口
      */
-    public WebSocket(String wsUrl,SocketCallback socketCallback){
-        this(URI.create(wsUrl),socketCallback);
-    }
-
-    /**
-     * 创建WebSocket对象
-     * @param uri 连接路径对象
-     * @param socketCallback 响应回调接口
-     */
-    public WebSocket(URI uri, SocketCallback socketCallback) {
-        mURI          = uri;
-        mSocketCallback = socketCallback;
-        mParser       = new HybiParser(this);
-        mHandlerThread = new HandlerThread("websocket-thread");
-        mHandlerThread.start();
-        mHandler = new Handler(mHandlerThread.getLooper());
-    }
-
     public static void setTrustManagers(TrustManager[] tm) {
-        sTrustManagers = tm;
+        trustManagers = tm;
     }
 
+    public WebSocket(String wsUrl,WSCallback wsCallback){
+        this(URI.create(wsUrl),wsCallback,null);
+    }
 
-    public void setExtraHeaders (List<BasicNameValuePair> mExtraHeaders) {
-        this.mExtraHeaders = mExtraHeaders;
+    public WebSocket(String wsUrl,WSCallback wsCallback,List<BasicNameValuePair> extraHeaders){
+        this(URI.create(wsUrl),wsCallback,extraHeaders);
+    }
+
+    public WebSocket(URI uri, WSCallback WSCallback, List<BasicNameValuePair> extraHeaders) {
+        this.uri = uri;
+        wsCallback = WSCallback;
+        this.extraHeaders = extraHeaders;
+        parser = new HybiParser(this);
+        handlerThread = new HandlerThread("websocket-thread");
+        handlerThread.start();
+        handler = new Handler(handlerThread.getLooper());
     }
 
     /**
-     * 获取Socket回调响应接口
-     * @return 回调响应接口
+     * 设置WebSocket Header数据
+     * @param extraHeaders  Header数据
      */
-    public SocketCallback getSocketCallback() {
-        return mSocketCallback;
-    }
-
-    public boolean isConnected(){
-        return mThread != null && mThread.isAlive();
+    public void setExtraHeaders (List<BasicNameValuePair> extraHeaders) {
+        this.extraHeaders = extraHeaders;
     }
 
     /**
-     * 建立连接。如果此前已经创建连接并且该连接仍然有效，则不会执行连接操作。
+     * 返回WebSocket的连接状态
+     * @return 当WebSocket为连接状态为true，否则为false。
+     */
+    public boolean isConnected(){
+        return workThread != null && workThread.isAlive();
+    }
+
+    /**
+     * 连接，如果WebSocket已经连接，则不做操作。
      */
     public void connect() {
         if (isConnected()) {
             return;
         }
-        mThread = new Thread(new Runnable() {
+        workThread = new Thread(buildConnection());
+        workThread.start();
+    }
+
+    Runnable buildConnection(){
+        return
+        new Runnable() {
             @Override
             public void run() {
                 try {
-
-                    String scheme = mURI.getScheme();
-
-                    if ( !verifyScheme(scheme) ) new IllegalArgumentException("Illegal scheme: "+scheme);
-
-                    boolean isSSL = scheme.equalsIgnoreCase("wss");
-                    String path = mURI.getPath();
-                    int port = mURI.getPort();
-                    port = (port != -1) ? port : (isSSL ? 443 : 80);
+                    String scheme = uri.getScheme();
+                    if(!verifyScheme(scheme)){
+                        throw new IllegalArgumentException("Unknown Web Socket scheme: "+scheme);
+                    }
+                    String path = uri.getPath();
+                    final boolean isSSL = scheme.equalsIgnoreCase("wss");
+                    int port = (uri.getPort() != -1) ? uri.getPort() : (isSSL ? 443 : 80);
 
                     path = TextUtils.isEmpty(path) ? "/" : path;
-                    if (!TextUtils.isEmpty(mURI.getQuery())) {
-                        path += "?" + mURI.getQuery();
+                    if (!TextUtils.isEmpty(uri.getQuery())) {
+                        path += "?" + uri.getQuery();
                     }
-
-                    SocketFactory factory = isSSL ?
-                            getSSLSocketFactory() : SocketFactory.getDefault();
-                    mSocket = factory.createSocket(mURI.getHost(), port);
 
                     String originScheme = isSSL ? "https" : "http";
-                    URI origin = new URI(originScheme, "//" + mURI.getHost(), null);
+                    URI origin = new URI(originScheme, "//" + uri.getHost(), null);
+
+                    SocketFactory factory = isSSL ?
+                                                    getSSLSocketFactory() :  SocketFactory.getDefault();
+                    socket = factory.createSocket(uri.getHost(), port);
                     String secret = createSecret();
 
-                    PrintWriter handShakeOutput = new PrintWriter(mSocket.getOutputStream());
-                    handShakeOutput.print("GET " + path + " HTTP/1.1\r\n");
-                    handShakeOutput.print("Upgrade: websocket\r\n");
-                    handShakeOutput.print("Connection: Upgrade\r\n");
-                    handShakeOutput.print("Host: " + mURI.getHost() + "\r\n");
-                    handShakeOutput.print("Origin: " + origin.toString() + "\r\n");
-                    handShakeOutput.print("Sec-WebSocket-Key: " + secret + "\r\n");
-                    handShakeOutput.print("Sec-WebSocket-Version: 13\r\n");
-                    if (mExtraHeaders != null) {
-                        for (NameValuePair pair : mExtraHeaders) {
-                            handShakeOutput.print(String.format("%s: %s\r\n", pair.getName(), pair.getValue()));
+                    PrintWriter out = new PrintWriter(socket.getOutputStream());
+                    out.print("GET " + path + " HTTP/1.1\r\n");
+                    out.print("Upgrade: websocket\r\n");
+                    out.print("Connection: Upgrade\r\n");
+                    out.print("Host: " + uri.getHost() + "\r\n");
+                    out.print("Origin: " + origin.toString() + "\r\n");
+                    out.print("Sec-WebSocket-Key: " + secret + "\r\n");
+                    out.print("Sec-WebSocket-Version: 13\r\n");
+                    if (extraHeaders != null) {
+                        for (NameValuePair pair : extraHeaders) {
+                            out.print(String.format("%s: %s\r\n", pair.getName(), pair.getValue()));
                         }
                     }
-                    handShakeOutput.print("\r\n");
-                    handShakeOutput.flush();
+                    out.print("\r\n");
+                    out.flush();
 
                     HybiParser.HappyDataInputStream stream =
-                            new HybiParser.HappyDataInputStream(mSocket.getInputStream());
+                            new HybiParser.HappyDataInputStream(socket.getInputStream());
 
                     // Read HTTP response status line.
                     StatusLine statusLine = parseStatusLine(readLine(stream));
@@ -168,58 +170,63 @@ public class WebSocket {
                     if (!validated) {
                         throw new HttpException("No Sec-WebSocket-Accept header.");
                     }
-                    mSocketCallback.onOpen();
-                    // Now decode websocket frames.
-                    mParser.start(stream);
+
+                    wsCallback.onConnect();
+
+                    // 若读取失败，此方法将被返回，Thread被结束。
+                    parser.start(stream);
+
                 } catch (EOFException ex) {
                     Log.d(TAG, "WebSocket EOF!", ex);
-                    mSocketCallback.onClose(0, "EOF");
+                    wsCallback.onDisconnect(0, "EOF");
                 } catch (SSLException ex) {
                     // Connection reset by peer
                     Log.d(TAG, "Websocket SSL error!", ex);
-                    mSocketCallback.onClose(0, "SSL");
+                    wsCallback.onDisconnect(0, "SSL");
                 } catch (Exception ex) {
-                    mSocketCallback.onError(ex);
+                    wsCallback.onError(ex);
+                }
+            }
+        };
+    }
+
+    /**
+     * 主动断开WebSocket连接
+     */
+    public void disconnect() {
+        if (socket == null) return;
+        handler.post(new Runnable() {
+            @Override
+            public void run () {
+                try {
+                    socket.close();
+                    socket = null;
+                } catch (IOException ex) {
+                    Log.d(TAG, "Error while disconnecting", ex);
+                    wsCallback.onError(ex);
                 }
             }
         });
-        mThread.start();
     }
 
     /**
-     * 断开连接
-     */
-    public void disconnect() {
-        if (mSocket != null) {
-            mHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        mSocket.close();
-                        mSocket = null;
-                    } catch (IOException ex) {
-                        Log.d(TAG, "Error while disconnecting", ex);
-                        mSocketCallback.onError(ex);
-                    }
-                }
-            });
-        }
-    }
-
-    /**
-     * 发送文本消息到服务端
-     * @param data
+     * 发送文本数据
+     * @param data 文本数据
      */
     public void send(String data) {
-        sendFrame(mParser.frame(data));
+        sendFrame(parser.frame(data));
     }
 
     /**
-     * 发送字节数据到服务端
+     * 发送字节数据
      * @param data 字节数据
      */
     public void send(byte[] data) {
-        sendFrame(mParser.frame(data));
+        sendFrame(parser.frame(data));
+    }
+
+    WSCallback getCallback () {
+        return wsCallback;
     }
 
     private StatusLine parseStatusLine(String line) {
@@ -276,20 +283,20 @@ public class WebSocket {
     }
 
     void sendFrame(final byte[] frame) {
-        mHandler.post(new Runnable() {
+        handler.post(new Runnable() {
             @Override
-            public void run() {
+            public void run () {
                 try {
-                    synchronized (mSendLock) {
-                        if (mSocket == null) {
+                    synchronized (sendLock) {
+                        if (socket == null) {
                             throw new IllegalStateException("Socket not connected");
                         }
-                        OutputStream outputStream = mSocket.getOutputStream();
+                        OutputStream outputStream = socket.getOutputStream();
                         outputStream.write(frame);
                         outputStream.flush();
                     }
                 } catch (Exception e) {
-                    mSocketCallback.onError(e);
+                    wsCallback.onError(e);
                 }
             }
         });
@@ -297,7 +304,7 @@ public class WebSocket {
 
     private SSLSocketFactory getSSLSocketFactory() throws NoSuchAlgorithmException, KeyManagementException {
         SSLContext context = SSLContext.getInstance("TLS");
-        context.init(null, sTrustManagers, null);
+        context.init(null, trustManagers, null);
         return context.getSocketFactory();
     }
 }

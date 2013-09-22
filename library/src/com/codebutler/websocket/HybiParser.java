@@ -128,7 +128,7 @@ public class HybiParser {
                     break;
             }
         }
-        mClient.getSocketCallback().onClose(0, "EOF");
+        mClient.getCallback().onDisconnect(0, "EOF");
     }
 
     private void parseOpcode(byte data) throws ProtocolError {
@@ -262,9 +262,10 @@ public class HybiParser {
             if (mFinal) {
                 byte[] message = mBuffer.toByteArray();
                 if (mMode == MODE_TEXT) {
-                    mClient.getSocketCallback().onMessage(encode(message));
+                    mClient.getCallback().onMessage(encode(message));
                 } else {
-                    mClient.getSocketCallback().onMessage(message);
+                    mClient.getCallback().onMessage(message);
+
                 }
                 reset();
             }
@@ -272,7 +273,7 @@ public class HybiParser {
         } else if (opcode == OP_TEXT) {
             if (mFinal) {
                 String messageText = encode(payload);
-                mClient.getSocketCallback().onMessage(messageText);
+                mClient.getCallback().onMessage(messageText);
             } else {
                 mMode = MODE_TEXT;
                 mBuffer.write(payload);
@@ -280,7 +281,7 @@ public class HybiParser {
 
         } else if (opcode == OP_BINARY) {
             if (mFinal) {
-                mClient.getSocketCallback().onMessage(payload);
+                mClient.getCallback().onMessage(payload);
             } else {
                 mMode = MODE_BINARY;
                 mBuffer.write(payload);
@@ -290,8 +291,7 @@ public class HybiParser {
             int    code   = (payload.length >= 2) ? 256 * payload[0] + payload[1] : 0;
             String reason = (payload.length >  2) ? encode(slice(payload, 2))     : null;
             Log.d(TAG, "Got close op! " + code + " " + reason);
-            mClient.getSocketCallback().onClose(code, reason);
-
+            mClient.getCallback().onDisconnect(code, reason);
         } else if (opcode == OP_PING) {
             if (payload.length > 125) { throw new ProtocolError("Ping payload too large"); }
             Log.d(TAG, "Sending pong!!");

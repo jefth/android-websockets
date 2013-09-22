@@ -5,7 +5,7 @@ package com.codebutler.websocket;
  * Time: 2013-09-18
  * 屏蔽 onMessage(String data) 方法，只处理二进制数据结果
  */
-public abstract class BinaryCallback implements SocketCallback {
+public abstract class BinaryCallback implements WSCallback {
 
     @Override
     final public void onMessage (String data) { }
