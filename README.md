@@ -1,6 +1,6 @@
 # WebSocket client for Android
 
-A very simple bare-minimum WebSocket client for Android.
+在Android平台上实现的，最轻量，最简单的Web Socket客户端。
 
 ## Credits
 
@@ -13,45 +13,47 @@ Ported from JavaScript to Java by [Eric Butler](https://twitter.com/codebutler) 
 Here's the entire API:
 
 ```java
-List<BasicNameValuePair> extraHeaders = Arrays.asList(
-    new BasicNameValuePair("Cookie", "session=abcd");
-);
+public void testMain() throws InterruptedException {
+        List<BasicNameValuePair> extraHeaders = Arrays.asList(
+                new BasicNameValuePair("Cookie", "session=abcd")
+        );
+        WebSocket client = new WebSocket(
+                URI.create("ws://192.168.1.248:8889/websocket"), new WSCallback() {
+            @Override
+            public void onConnect() {
+                Log.d(TAG, "连接成功!");
+            }
 
-WebSocketClient client = new WebSocketClient(URI.create("wss://irccloud.com"), new WebSocketClient.Handler() {
-    @Override
-    public void onConnect() {
-        Log.d(TAG, "Connected!");
+            @Override
+            public void onMessage(String message) {
+                Log.d(TAG, String.format("返回数据（字符）:\n %s", message));
+            }
+
+            @Override
+            public void onMessage(byte[] data) {
+                Log.d(TAG, String.format("返回数据（字节）:\n %s", String.valueOf(data)));
+            }
+
+            @Override
+            public void onDisconnect(int code, String reason) {
+                Log.d(TAG, String.format("连接被断开! Code: %d 原因: %s", code, reason));
+            }
+
+            @Override
+            public void onError(Exception error) {
+                Log.e(TAG, "发生错误：", error);
+            }
+        }, extraHeaders);
+
+        client.connect();
+
+        client.send("hello!");
+
+        Thread.sleep(3*60*1000);
+
+        client.disconnect();
     }
-
-    @Override
-    public void onReceived(String message) {
-        Log.d(TAG, String.format("Got string message! %s", message));
-    }
-
-    @Override
-    public void onReceived(byte[] data) {
-        Log.d(TAG, String.format("Got binary message! %s", toHexString(data));
-    }
-
-    @Override
-    public void onDisconnect(int code, String reason) {
-        Log.d(TAG, String.format("Disconnected! Code: %d Reason: %s", code, reason));
-    }
-
-    @Override
-    public void onError(Exception error) {
-        Log.e(TAG, "Error!", error);
-    }
-}, extraHeaders);
-
-client.connect();
-
-// Later… 
-client.send("hello!");
-client.send(new byte[] { 0xDE, 0xAD, 0xBE, 0xEF });
-client.disconnect();
 ```
-
 
 ## TODO
 
