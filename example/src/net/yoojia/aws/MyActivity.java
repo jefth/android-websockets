@@ -2,6 +2,14 @@ package net.yoojia.aws;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.util.Log;
+import com.codebutler.websocket.WSCallback;
+import com.codebutler.websocket.WebSocket;
+import org.apache.http.message.BasicNameValuePair;
+
+import java.net.URI;
+import java.util.Arrays;
+import java.util.List;
 
 public class MyActivity extends Activity {
     /**

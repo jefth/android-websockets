@@ -19,7 +19,7 @@ public class Test extends TestCase{
                 new BasicNameValuePair("Cookie", "session=abcd")
         );
         WebSocket client = new WebSocket(
-                URI.create("ws://192.168.1.248:8889/websocket"), new WSCallback() {
+                URI.create("ws://192.168.1.105:8887"), new WSCallback() {
             @Override
             public void onConnect() {
                 Log.d(TAG, "连接成功!");
@@ -44,7 +44,7 @@ public class Test extends TestCase{
             public void onError(Exception error) {
                 Log.e(TAG, "发生错误：", error);
             }
-        }, extraHeaders);
+        }, null);
 
         client.connect();
 

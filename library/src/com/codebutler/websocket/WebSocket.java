@@ -30,6 +30,10 @@ import java.util.List;
  * 单线程WebSocket客户端
  */
 public class WebSocket {
+
+    public static final int CODE_EOF = 11;
+    public static final int CODE_SSL = 13;
+
     private static final String TAG = "WebSocket";
     private URI uri;
     private WSCallback wsCallback;
@@ -66,7 +70,7 @@ public class WebSocket {
         wsCallback = WSCallback;
         this.extraHeaders = extraHeaders;
         parser = new HybiParser(this);
-        handlerThread = new HandlerThread("websocket-thread");
+        handlerThread = new HandlerThread("WebSocket-Thread");
         handlerThread.start();
         handler = new Handler(handlerThread.getLooper());
     }
@@ -105,85 +109,91 @@ public class WebSocket {
             public void run() {
                 try {
                     String scheme = uri.getScheme();
-                    String path = uri.getPath();
-                    final boolean isSSL = scheme.equalsIgnoreCase("wss");
-                    int port = (uri.getPort() != -1) ? uri.getPort() : (isSSL ? 443 : 80);
 
-                    path = TextUtils.isEmpty(path) ? "/" : path;
-                    if (!TextUtils.isEmpty(uri.getQuery())) {
-                        path += "?" + uri.getQuery();
-                    }
+                    if (verifyScheme(scheme)) {
 
-                    String originScheme = isSSL ? "https" : "http";
-                    URI origin = new URI(originScheme, "//" + uri.getHost(), null);
+                        String path = uri.getPath();
+                        final boolean isSSL = scheme.equalsIgnoreCase("wss");
+                        int port = (uri.getPort() != -1) ? uri.getPort() : (isSSL ? 443 : 80);
 
-                    SocketFactory factory = isSSL ?
-                                                    getSSLSocketFactory() :  SocketFactory.getDefault();
-                    socket = factory.createSocket(uri.getHost(), port);
-                    String secret = createSecret();
-
-                    PrintWriter out = new PrintWriter(socket.getOutputStream());
-                    out.print("GET " + path + " HTTP/1.1\r\n");
-                    out.print("Upgrade: websocket\r\n");
-                    out.print("Connection: Upgrade\r\n");
-                    out.print("Host: " + uri.getHost() + "\r\n");
-                    out.print("Origin: " + origin.toString() + "\r\n");
-                    out.print("Sec-WebSocket-Key: " + secret + "\r\n");
-                    out.print("Sec-WebSocket-Version: 13\r\n");
-                    if (extraHeaders != null) {
-                        for (NameValuePair pair : extraHeaders) {
-                            out.print(String.format("%s: %s\r\n", pair.getName(), pair.getValue()));
+                        path = TextUtils.isEmpty(path) ? "/" : path;
+                        if (!TextUtils.isEmpty(uri.getQuery())) {
+                            path += "?" + uri.getQuery();
                         }
-                    }
-                    out.print("\r\n");
-                    out.flush();
 
-                    HybiParser.HappyDataInputStream stream =
-                            new HybiParser.HappyDataInputStream(socket.getInputStream());
+                        String originScheme = isSSL ? "https" : "http";
+                        URI origin = new URI(originScheme, "//" + uri.getHost(), null);
 
-                    // Read HTTP response status line.
-                    StatusLine statusLine = parseStatusLine(readLine(stream));
-                    if (statusLine == null) {
-                        throw new HttpException("Received no reply from server.");
-                    } else if (statusLine.getStatusCode() != HttpStatus.SC_SWITCHING_PROTOCOLS) {
-                        throw new HttpResponseException(statusLine.getStatusCode(), statusLine.getReasonPhrase());
-                    }
+                        SocketFactory factory = isSSL ?
+                                getSSLSocketFactory() : SocketFactory.getDefault();
+                        socket = factory.createSocket(uri.getHost(), port);
+                        String secret = createSecret();
 
-                    // Read HTTP response headers.
-                    String line;
-                    boolean validated = false;
-
-                    while (!TextUtils.isEmpty(line = readLine(stream))) {
-                        Header header = parseHeader(line);
-                        if (header.getName().equals("Sec-WebSocket-Accept")) {
-                            String expected = createSecretValidation(secret);
-                            String actual = header.getValue().trim();
-
-                            if (!expected.equals(actual)) {
-                                throw new HttpException("Bad Sec-WebSocket-Accept header value.");
+                        PrintWriter out = new PrintWriter(socket.getOutputStream());
+                        out.print("GET " + path + " HTTP/1.1\r\n");
+                        out.print("Upgrade: websocket\r\n");
+                        out.print("Connection: Upgrade\r\n");
+                        out.print("Host: " + uri.getHost() + "\r\n");
+                        out.print("Origin: " + origin.toString() + "\r\n");
+                        out.print("Sec-WebSocket-Key: " + secret + "\r\n");
+                        out.print("Sec-WebSocket-Version: 13\r\n");
+                        if (extraHeaders != null) {
+                            for (NameValuePair pair : extraHeaders) {
+                                out.print(String.format("%s: %s\r\n", pair.getName(), pair.getValue()));
                             }
-
-                            validated = true;
                         }
+                        out.print("\r\n");
+                        out.flush();
+
+                        HybiParser.HappyDataInputStream stream =
+                                new HybiParser.HappyDataInputStream(socket.getInputStream());
+
+                        // Read HTTP response status line.
+                        StatusLine statusLine = parseStatusLine(readLine(stream));
+                        if (statusLine == null) {
+                            throw new HttpException("Received no reply from server.");
+                        } else if (statusLine.getStatusCode() != HttpStatus.SC_SWITCHING_PROTOCOLS) {
+                            throw new HttpResponseException(statusLine.getStatusCode(), statusLine.getReasonPhrase());
+                        }
+
+                        // Read HTTP response headers.
+                        String line;
+                        boolean validated = false;
+
+                        while (!TextUtils.isEmpty(line = readLine(stream))) {
+                            Header header = parseHeader(line);
+                            if (header.getName().equals("Sec-WebSocket-Accept")) {
+                                String expected = createSecretValidation(secret);
+                                String actual = header.getValue().trim();
+
+                                if (!expected.equals(actual)) {
+                                    throw new HttpException("Bad Sec-WebSocket-Accept header value.");
+                                }
+
+                                validated = true;
+                            }
+                        }
+
+                        if (!validated) {
+                            throw new HttpException("No Sec-WebSocket-Accept header.");
+                        }
+
+                        wsCallback.onConnect();
+
+                        // Now decode websocket frames.
+                        parser.start(stream);
+                    } else {
+                        throw new IllegalArgumentException("Illegal WebSocket scheme: " + scheme);
                     }
-
-                    if (!validated) {
-                        throw new HttpException("No Sec-WebSocket-Accept header.");
-                    }
-
-                    wsCallback.onConnect();
-
-                    // Now decode websocket frames.
-                    parser.start(stream);
 
                 } catch (EOFException ex) {
                     Log.d(TAG, "WebSocket EOF!", ex);
-                    wsCallback.onDisconnect(0, "EOF");
+                    wsCallback.onDisconnect(CODE_EOF, "EOF");
 
                 } catch (SSLException ex) {
                     // Connection reset by peer
-                    Log.d(TAG, "Websocket SSL error!", ex);
-                    wsCallback.onDisconnect(0, "SSL");
+                    Log.d(TAG, "WebSocket SSL error!", ex);
+                    wsCallback.onDisconnect(CODE_SSL, "SSL");
 
                 } catch (Exception ex) {
                     wsCallback.onError(ex);
