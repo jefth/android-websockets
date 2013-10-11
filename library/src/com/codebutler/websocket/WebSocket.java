@@ -100,6 +100,7 @@ public class WebSocket {
         }
         workThread = new Thread(buildConnection());
         workThread.start();
+        Log.i(TAG,"WebSocket CONNECTING...");
     }
 
     Runnable buildConnection(){
@@ -196,6 +197,7 @@ public class WebSocket {
                     wsCallback.onDisconnect(CODE_SSL, "SSL");
 
                 } catch (Exception ex) {
+                    Log.i(TAG,"WebSocket UNKNOWN Error: "+ex);
                     wsCallback.onError(ex);
                 }
             }
