@@ -31,8 +31,9 @@ import java.util.List;
  */
 public class WebSocket {
 
-    public static final int CODE_EOF = 11;
-    public static final int CODE_SSL = 13;
+    public static final int CODE_EOF = 1;
+    public static final int CODE_SSL = 3;
+    public static final int CODE_MANUAL = 5;
 
     private static final String TAG = "WebSocket";
     private URI uri;
@@ -44,7 +45,7 @@ public class WebSocket {
     private List<BasicNameValuePair> extraHeaders;
     private HybiParser parser;
     private final Object sendLock = new Object();
-
+    private boolean manualDisconnect = false;
     private static TrustManager[] trustManagers;
 
     /**
@@ -95,6 +96,9 @@ public class WebSocket {
      * 连接，如果WebSocket已经连接，则不做操作。
      */
     public void connect() {
+        // 初始化这个标识位
+        manualDisconnect = false;
+
         if (isConnected()) {
             return;
         }
@@ -196,6 +200,12 @@ public class WebSocket {
                     Log.d(TAG, "WebSocket SSL error!", ex);
                     wsCallback.onDisconnect(CODE_SSL, "SSL");
 
+                } catch (IllegalStateException ex){
+                    if(manualDisconnect){
+                        wsCallback.onDisconnect(CODE_MANUAL, "MANUAL");
+                    }else{
+                        wsCallback.onError(ex);
+                    }
                 } catch (Exception ex) {
                     Log.i(TAG,"WebSocket UNKNOWN Error: "+ex);
                     wsCallback.onError(ex);
@@ -209,6 +219,10 @@ public class WebSocket {
      */
     public void disconnect() {
         if (socket == null) return;
+
+        manualDisconnect = true;
+
+        //将断开连接的请求，放到一个消息队列中处理
         handler.post(new Runnable() {
             @Override
             public void run () {
